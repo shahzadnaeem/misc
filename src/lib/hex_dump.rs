@@ -3,12 +3,15 @@ use std::net::{IpAddr, Ipv4Addr};
 use std::process::{Command, Stdio};
 use thiserror::Error;
 
-const MAX_LEN: usize = 40;
+const MAX_LEN: usize = 100;
 
 #[derive(Error, Debug)]
 pub enum HexDumpError {
     #[error("Input too big {0} - MAX {}", MAX_LEN)]
     TooBig(usize),
+
+    #[error("Command failed - exit_status {0}")]
+    ErrorExit(i32),
 
     #[error(transparent)]
     Io(#[from] io::Error),
@@ -35,16 +38,22 @@ fn fake_net_error(fail: bool) -> Result<IpAddr, std::net::AddrParseError> {
     }
 }
 
-pub fn hex_dump_via_od(s: &str, cmd: &str) -> Result<String, HexDumpError> {
+fn check_len(s: &str) -> Result<(), HexDumpError> {
     if s.len() > MAX_LEN {
-        return Err(HexDumpError::TooBig(s.len()));
+        return Err(HexDumpError::TooBig(s.len()).into());
     }
 
-    fake_net_error(true)?;
+    Ok(())
+}
+
+pub fn hex_dump_via_cmd(s: &str, cmd: &str, args: &[&str]) -> Result<String, HexDumpError> {
+    // Some potential errors
+    check_len(s)?;
+    fake_net_error(false)?;
     fake_os_error(false)?;
 
     let mut cmd = Command::new(cmd)
-        .args(["-A", "x", "-t", "x1z", "-v"])
+        .args(args)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .spawn()?;
@@ -59,11 +68,29 @@ pub fn hex_dump_via_od(s: &str, cmd: &str) -> Result<String, HexDumpError> {
             .expect("Failed to write to input");
     });
 
-    let output = cmd.wait_with_output()?;
-
     let mut result = String::new();
+    let just_output = false;
 
-    output.stdout.as_slice().read_to_string(&mut result)?;
+    if just_output {
+        let output = cmd.wait_with_output()?;
+
+        output.stdout.as_slice().read_to_string(&mut result)?;
+    } else {
+        let mut stdout = cmd.stdout.take().expect("Failed to get stdout");
+
+        let status = cmd.wait()?;
+        let code = status.code().unwrap_or(-1);
+
+        if code != 0 {
+            return Err(HexDumpError::ErrorExit(code));
+        }
+
+        stdout.read_to_string(&mut result)?;
+    }
 
     Ok(result)
+}
+
+pub fn hex_dump_via_cmd_anyh(s: &str, cmd: &str, args: &[&str]) -> anyhow::Result<String> {
+    Ok(hex_dump_via_cmd(s, cmd, args)?)
 }

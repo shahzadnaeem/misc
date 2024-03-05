@@ -1,5 +1,6 @@
+use anyhow::Context;
 #[allow(dead_code)]
-use misc::hex_dump::hex_dump_via_od;
+use misc::hex_dump::{hex_dump_via_cmd, hex_dump_via_cmd_anyh};
 pub use misc::{fn_stuff, new_vec, one_shot_tcp_server};
 
 fn new_vec_stuff() {
@@ -83,7 +84,7 @@ fn slice_stuff() {
     println!("reversed buf: {:?}", buf);
 }
 
-fn main() {
+fn main() -> anyhow::Result<()> {
     if false {
         new_vec_stuff();
 
@@ -101,9 +102,27 @@ fn main() {
 
     let output = format!("s1: {}, s2: {}", s1, s2);
     let cmd = "od";
+    let args = ["-A", "x", "-t", "x1z", "-v"];
+    // let args = ["-A"]; // NOTE: to trigger errors
 
-    let res = hex_dump_via_od(&output, cmd)
-        .unwrap_or_else(|e| format!("Error: Failed to run external command: {cmd}\n\t{}\n", e));
+    // Manually managed error handling
+    let mut ok = true;
+    let res = hex_dump_via_cmd(&output, cmd, &args).unwrap_or_else(|e| {
+        ok = false;
+        format!(
+            "Error: Command failed: {cmd} {}\n\t{} - from: {:?}\n",
+            args.join(" "),
+            e,
+            e
+        )
+    });
+    println!("\nStatus: {}\n{}", if ok { "GOOD" } else { "ERROR" }, res);
 
-    print!("{}", res);
+    // Rusty + anyhow error handling
+    let res = hex_dump_via_cmd_anyh(&output, cmd, &args)
+        .with_context(|| format!("Command failed: {} {}", cmd, args.join(" ")))?;
+
+    print!("\nStatus: GOOD\n{}", res);
+
+    Ok(())
 }
