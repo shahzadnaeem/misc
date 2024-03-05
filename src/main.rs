@@ -1,4 +1,6 @@
-use misc::new_vec;
+#[allow(dead_code)]
+use misc::hex_dump::hex_dump_via_od;
+pub use misc::{fn_stuff, new_vec, one_shot_tcp_server};
 
 fn new_vec_stuff() {
     // Create
@@ -71,8 +73,6 @@ fn slice_stuff() {
     copy_slice(&src, &mut dest, 7);
     assert_eq!([0, 0, 0, 0, 5, 4, 3, 5, 4, 3], dest);
 
-    return;
-
     let mut buf: [u8; 4] = [0u8; 4];
     for i in 0..buf.len() {
         buf[i] = i as u8;
@@ -84,9 +84,26 @@ fn slice_stuff() {
 }
 
 fn main() {
-    // new_vec_stuff();
+    if false {
+        new_vec_stuff();
 
-    // more_vec_stuff();
+        more_vec_stuff();
 
-    // slice_stuff();
+        slice_stuff();
+
+        fn_stuff();
+
+        one_shot_tcp_server();
+    }
+
+    let s1 = "Hello";
+    let s2 = "Hell\0\tllo";
+
+    let output = format!("s1: {}, s2: {}", s1, s2);
+    let cmd = "od";
+
+    let res = hex_dump_via_od(&output, cmd)
+        .unwrap_or_else(|e| format!("Error: Failed to run external command: {cmd}\n\t{}\n", e));
+
+    print!("{}", res);
 }
